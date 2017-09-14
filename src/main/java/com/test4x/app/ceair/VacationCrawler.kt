@@ -20,8 +20,9 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
 
     init {
         val asyncHttpClientConfig = DefaultAsyncHttpClientConfig.Builder()
-                .setMaxConnectionsPerHost(20)
-                .setConnectTimeout(30 * 1000)
+                .setConnectTimeout(180 * 1000)
+                .setReadTimeout(180 * 1000)
+                .setRequestTimeout(180 * 1000)
                 .setMaxRedirects(5)
                 .build()
         asyncHttpClient = DefaultAsyncHttpClient(asyncHttpClientConfig)
@@ -35,9 +36,7 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
         val datePriceList = productSchedule.get()
 
         //获取详情
-        val detailFuture = getProductDetail(datePriceList.first().dateId).toCompletableFuture().thenAccept {
-            mongo.save(it, Constants.PRODUCT)
-        }
+        val ceairProductFuture = getProductDetail(datePriceList.first().dateId)
 
         val getProductRelation = GetProductRelation()
         datePriceList.map {
@@ -49,11 +48,12 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
             it.get()
         }
 
+
+        val productRelation = getProductRelation.get()
         datePriceList.forEach {
             mongo.save(it, Constants.DATE_PRICE)
         }
-        detailFuture.get()
-        val productRelation = getProductRelation.get()
+        mongo.save(ceairProductFuture.get(), Constants.PRODUCT)
         asyncHttpClient.close()
         return productRelation
     }
@@ -138,6 +138,20 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
                         return list1 + list2
                     }
                 })
+    }
+
+    public fun <T> Sequence<T>.batch(n: Int): Sequence<List<T>> {
+        return BatchingSequence(this, n)
+    }
+
+    private class BatchingSequence<T>(val source: Sequence<T>, val batchSize: Int) : Sequence<List<T>> {
+        override fun iterator(): Iterator<List<T>> = object : AbstractIterator<List<T>>() {
+            val iterate = if (batchSize > 0) source.iterator() else emptyList<T>().iterator()
+            override fun computeNext() {
+                if (iterate.hasNext()) setNext(iterate.asSequence().take(batchSize).toList())
+                else done()
+            }
+        }
     }
 
 

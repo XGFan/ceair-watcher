@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.test4x.app.ceair.bean.CeairProduct
 import com.test4x.app.ceair.bean.DatePrice
 import org.asynchttpclient.*
-import org.springframework.data.mongodb.core.BulkOperations
 import org.springframework.data.mongodb.core.MongoTemplate
 import java.time.LocalDateTime
 
@@ -20,8 +19,11 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
     val asyncHttpClient: AsyncHttpClient
 
     init {
-        val builder = DefaultAsyncHttpClientConfig.Builder()
-        val asyncHttpClientConfig = builder.build()
+        val asyncHttpClientConfig = DefaultAsyncHttpClientConfig.Builder()
+                .setMaxConnectionsPerHost(20)
+                .setConnectTimeout(30 * 1000)
+                .setMaxRedirects(5)
+                .build()
         asyncHttpClient = DefaultAsyncHttpClient(asyncHttpClientConfig)
     }
 
@@ -34,10 +36,9 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
 
         //获取详情
         val detailFuture = getProductDetail(datePriceList.first().dateId).toCompletableFuture().thenAccept {
-            mongo.save(it, "product")
+            mongo.save(it, Constants.PRODUCT)
         }
 
-        val bulkOps = mongo.bulkOps(BulkOperations.BulkMode.UNORDERED, "datePrice")
         val getProductRelation = GetProductRelation()
         datePriceList.map {
             getProductPrice(it.dateId)
@@ -49,14 +50,12 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
         }
 
         datePriceList.forEach {
-            bulkOps.insert(it)
+            mongo.save(it, Constants.DATE_PRICE)
         }
-        bulkOps.execute()
         detailFuture.get()
         val productRelation = getProductRelation.get()
         asyncHttpClient.close()
-        return productRelation;
-
+        return productRelation
     }
 
     fun getProductSchedule(): ListenableFuture<List<DatePrice>> {
@@ -76,11 +75,6 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
                                     val ld = LocalDateTime.parse(dateString).toLocalDate()
                                     DatePrice(productId, dateId, ld, amount)
                                 }
-                    }
-
-                    override fun onThrowable(t: Throwable?) {
-                        //todo 应该抛出重试
-                        super.onThrowable(t)
                     }
                 })
     }
@@ -102,11 +96,6 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
                         ceairProduct.Days = days
                         return ceairProduct
                     }
-
-                    override fun onThrowable(t: Throwable?) {
-                        //todo 应该抛出重试
-                        super.onThrowable(t)
-                    }
                 })
     }
 
@@ -124,11 +113,6 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
                                 .first()
                                 .get("TotalAmount")
                                 .asInt()
-                    }
-
-                    override fun onThrowable(t: Throwable?) {
-                        //todo 应该抛出重试
-                        super.onThrowable(t)
                     }
                 })
 

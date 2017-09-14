@@ -22,18 +22,17 @@ open class Ceair {
                 mongoTemplate.save(it, Constants.TASK)
             }
             println("Get ${searchList.size} items")
-            while (mongoTemplate.count(Query.query(Criteria.where("done").`is`(false)), Constants.TASK) > 0) {
-                val task = mongoTemplate.findOne(Query.query(Criteria.where("done").`is`(false)), Task::class.java, Constants.TASK)
+            while (mongoTemplate.count(Query.query(Criteria.where("done").`is`(0)), Constants.TASK) > 0) {
+                val task = mongoTemplate.findOne(Query.query(Criteria.where("done").`is`(0)), Task::class.java, Constants.TASK)
                 try {
-                    val newList = VacationCrawler(task.id, mongoTemplate).run()
-                    newList.forEach {
-                        mongoTemplate.save(Task(it), Constants.TASK)
-                    }
-                    task.done = true
+                    VacationCrawler(task.id, mongoTemplate).run()
+                    task.done = 1
                     println("${task.id} Done")
                     mongoTemplate.save(task)
                 } catch (e: Exception) {
+                    task.done = -1
                     println("${task.id} Fail ${e.message}")
+                    mongoTemplate.save(task)
                     //rollback
                 }
 

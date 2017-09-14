@@ -29,7 +29,7 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
     }
 
 
-    fun run(): List<String> {
+    fun run() {
         //获取日程表
         val productSchedule = getProductSchedule()
 
@@ -49,13 +49,11 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
         }
 
 
-        val productRelation = getProductRelation.get()
         datePriceList.forEach {
             mongo.save(it, Constants.DATE_PRICE)
         }
         mongo.save(ceairProductFuture.get(), Constants.PRODUCT)
         asyncHttpClient.close()
-        return productRelation
     }
 
     fun getProductSchedule(): ListenableFuture<List<DatePrice>> {

@@ -5,5 +5,5 @@ import org.springframework.data.mongodb.core.mapping.Document
 
 @Document
 class Task(@Id val id: String) {
-    var done = false
+    var done = 0
 }

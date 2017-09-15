@@ -35,8 +35,20 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
 
         val datePriceList = productSchedule.get()
 
+        var ceairProduct: CeairProduct? = null
         //获取详情
-        val ceairProductFuture = getProductDetail(datePriceList.first().dateId)
+        var counter = 0
+        val iter = datePriceList.iterator()
+        while (ceairProduct == null) {
+            try {
+                ceairProduct = getProductDetail(iter.next().dateId).get()
+            } catch (e: Exception) {
+                counter++
+                if (counter >= 5) {
+                    throw RuntimeException("$productId 这个产品有毒")
+                }
+            }
+        }
 
         val getProductRelation = GetProductRelation()
         datePriceList.map {
@@ -52,7 +64,7 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
         datePriceList.forEach {
             mongo.save(it, Constants.DATE_PRICE)
         }
-        mongo.save(ceairProductFuture.get(), Constants.PRODUCT)
+        mongo.save(ceairProduct, Constants.PRODUCT)
         asyncHttpClient.close()
     }
 
@@ -106,11 +118,17 @@ class VacationCrawler(val productId: String, val mongo: MongoTemplate) {
                 .execute(object : AsyncCompletionHandler<Int>() {
                     override fun onCompleted(response: Response): Int {
                         val json = jackson.readTree(response.responseBody.reader())
-                        return json.get("Data")
-                                .get("ProductDefultPriceList")
-                                .first()
-                                .get("TotalAmount")
-                                .asInt()
+                        try {
+                            return json.get("Data")
+                                    .get("ProductDefultPriceList")
+                                    .first()
+                                    .get("TotalAmount")
+                                    .asInt()
+                        } catch (e: Exception) {
+                            println(productId + " - " + scheduleId)
+                            return -2
+                        }
+
                     }
                 })
 
